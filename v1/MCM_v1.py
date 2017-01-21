@@ -89,7 +89,7 @@ class TollBoothModel(Model):
         
         # Create booths
         for i in range(1,B+1):
-            b = Booth(i, self, i)
+            b = Booth(i, self)
             self.schedule.add(b)
             
         # Remove out-of-bounds vehicles
