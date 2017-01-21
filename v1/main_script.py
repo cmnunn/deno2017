@@ -28,3 +28,6 @@ merge_pts[1] = 20
 #merge_pts[2] = 20
 
 model = TollBoothModel(100, LANE_WIDTH, LANE_SPACING, B, L, merge_pts, dt)
+
+for i in range(200):
+    model.step()

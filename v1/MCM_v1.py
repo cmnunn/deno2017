@@ -30,7 +30,8 @@ class Booth(Agent):
         self.vel = 0
         
     def open_gate(self):
-        v = Vehicle(self.lane*1000+self.count, self.model, self.vel, self.lane)
+        lane = self.unique_id
+        v = Vehicle(lane*1000+self.count, self.model, self.vel, lane)
         self.model.schedule.add(v)
         self.model.map.place_agent(v, (0,self.y))
         self.count += 1
@@ -75,14 +76,15 @@ class Vehicle(Agent):
     
     def move(self):
         dt = self.model.dt
-        x = self.pos[0], y = self.pos[1]
+        x = self.pos[0]
+        y = self.pos[1]
         self.model.map.move_agent(self, (x+dt*self.x_vel,y+dt*self.y_vel))
     
     def step(self):
         #check if lane has ended
         x = self.pos[0]
         arr = self.model.map.merge_pts
-        if 0 < x <= arr[2*int(self.lane-1)]:
+        if 0 < arr[2*int(self.lane-1)] <= x:
             if self.x_vel > 0:
                 self.brake()
             else:
@@ -90,6 +92,7 @@ class Vehicle(Agent):
         else:
             self.accel()
         self.move()
+        print('Vehicle ',self.unique_id,' is @', x,' ft.')
 
 class TollBoothModel(Model):
     """A model with some number of agents."""
@@ -103,12 +106,6 @@ class TollBoothModel(Model):
         for i in range(1,B+1):
             b = Booth(i, self)
             self.schedule.add(b)
-            
-        # Remove out-of-bounds vehicles
-        for agent in self.schedule.agents[:]:
-            if agent.unique_id > B:
-                if self.map.out_of_bounds(agent.pos):
-                    self.schedule.remove(agent)
         
         #self.datacollector = DataCollector(
         #    model_reporters={"Gini": compute_gini},
@@ -116,7 +113,18 @@ class TollBoothModel(Model):
 
     def step(self):
         '''Advance the model by one step.'''
-        self.datacollector.collect(self)        
+        # Remove out-of-bounds vehicles
+        for agent in self.schedule.agents[:]:
+            if agent.unique_id > self.map.B: #is a vehicle
+                if self.map.out_of_bounds(agent.pos):
+                    self.schedule.remove(agent)
+            else:
+                if agent.unique_id == 1 and self.time % 5.0 == 0:
+                    agent.open_gate()
+                if agent.unique_id == 2 and self.time % 8.0 == 0:
+                    agent.open_gate()
+                    
+        #self.datacollector.collect(self)        
         self.schedule.step()
         self.time += self.dt
 
