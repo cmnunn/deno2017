@@ -58,12 +58,20 @@ class Vehicle(Agent):
         #decrease velocity
         self.x_vel = 0
         
+    def accel(self):
+        #increase velocity
+        self.x_vel = self.max_speed
+        
     def get_merge_direction(self):
         '''returns True if the next lane to merge to is left (False if Right)'''
         x = self.pos[0]
         roads = self.model.map
         arr = roads.merge_pts
-        return(self.lane < roads.B and (arr[self.lane] == 0 or arr[self.lane] > x))
+        return(self.lane < roads.B and \
+                (arr[2*int(self.lane)] == 0 or arr[2*int(self.lane)] > x))
+        
+    def merge(self):
+        pass
     
     def move(self):
         dt = self.model.dt
@@ -72,11 +80,15 @@ class Vehicle(Agent):
     
     def step(self):
         #check if lane has ended
-        # if not, move at max speed
-        # if so, brake
-            # then get merge direction
-            # then check for obstacle in that direction
-            # if no obstacles, change lane
+        x = self.pos[0]
+        arr = self.model.map.merge_pts
+        if 0 < x <= arr[2*int(self.lane-1)]:
+            if self.x_vel > 0:
+                self.brake()
+            else:
+                self.merge()
+        else:
+            self.accel()
         self.move()
 
 class TollBoothModel(Model):
