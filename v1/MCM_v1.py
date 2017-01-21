@@ -4,69 +4,107 @@ Created on Fri Jan 20 14:11:55 2017
 
 @author: cmnunn
 """
-
 from mesa import Agent, Model
-from mesa.time import RandomActivation
-from mesa.space import MultiGrid
-from mesa.datacollection import DataCollector
-import random
+from mesa.time import BaseScheduler
+from mesa.space import ContinuousSpace
+#from mesa.datacollection import DataCollector
+#import random
+#import numpy as np
 
-def compute_gini(model):
-    agent_wealths = [agent.wealth for agent in model.schedule.agents]
-    x = sorted(agent_wealths)
-    N = model.num_agents
-    B = sum( xi * (N-i) for i,xi in enumerate(x) ) / (N*sum(x))
-    return (1 + (1/N) - 2*B)
+class Map(ContinuousSpace):
+    """Space of the toll plaza, with defined lanes & bounds"""
+    def __init__(self, width, LANE_WIDTH, LANE_SPACING, B, L, merge_pts):
+        super().__init__(width, B*LANE_WIDTH+(B-1)*LANE_SPACING, False)
+        self.LANE_WIDTH = LANE_WIDTH
+        self.LANE_SPACING = LANE_SPACING
+        self.B = B
+        self.merge_pts = merge_pts
 
-class MoneyAgent(Agent):
-    """An agent with fixed initial wealth."""
-    def __init__(self, unique_id, model):
-        super().__init__(unique_id, model)
-        self.id = unique_id        
-        self.wealth = 1
+class Booth(Agent):
+    """Spawns vehicles according to control algorithms"""
+    def __init__(self, lane, model):
+        super().__init__(lane, model)
+        self.count = 0
+        self.y = lane*self.model.map.LANE_WIDTH/2 + \
+                (lane-1)*self.model.map.LANE_SPACING
+        self.vel = 0
         
-    def give_money(self):
-        cellmates = self.model.grid.get_cell_list_contents([self.pos])
-        if len(cellmates) > 1:
-            other = random.choice(cellmates)
-            other.wealth += 1
-            self.wealth -= 1
+    def open_gate(self):
+        v = Vehicle(self.lane*1000+self.count, self.model, self.vel, self.lane)
+        self.model.schedule.add(v)
+        self.model.map.place_agent(v, (0,self.y))
+        self.count += 1
+        
+    def get_y(self):
+        return self.y
+        
+    def get_vel(self):
+        return self.vel
+        
+
+class Vehicle(Agent):
+    """An agent with fixed initial wealth."""
+    def __init__(self, unique_id, model, vel, lane):
+        super().__init__(unique_id, model)
+        self.id = unique_id
+        self.lane = lane
+        self.width = 8 #feet
+        self.length = 15 # feet
+        self.x_vel = vel
+        self.y_vel = 0
+        self.max_speed = 30*1.46667 #feet/sec
+        
+    def brake(self):
+        #decrease velocity
+        self.x_vel = 0
+        
+    def get_merge_direction(self):
+        '''returns True if the next lane to merge to is left (False if Right)'''
+        x = self.pos[0]
+        roads = self.model.map
+        arr = roads.merge_pts
+        return(self.lane < roads.B and (arr[self.lane] == 0 or arr[self.lane] > x))
     
     def move(self):
-        possible_steps = self.model.grid.get_neighborhood(
-            self.pos,
-            moore=True,
-            include_center=False)
-        new_position = random.choice(possible_steps)
-        self.model.grid.move_agent(self, new_position)
+        dt = self.model.dt
+        x = self.pos[0], y = self.pos[1]
+        self.model.map.move_agent(self, (x+dt*self.x_vel,y+dt*self.y_vel))
     
     def step(self):
+        #check if lane has ended
+        # if not, move at max speed
+        # if so, brake
+            # then get merge direction
+            # then check for obstacle in that direction
+            # if no obstacles, change lane
         self.move()
-        if self.wealth > 0:
-            self.give_money()
 
-class MoneyModel(Model):
+class TollBoothModel(Model):
     """A model with some number of agents."""
-    def __init__(self, N, width, height):
-        self.num_agents = N
-        self.grid = MultiGrid(width, height, True)        
-        self.schedule = RandomActivation(self)
+    def __init__(self, width, LANE_WIDTH, LANE_SPACING, B, L, merge_pts, dt):
+        self.dt = dt
+        self.time = 0
+        self.map = Map(width,LANE_WIDTH,LANE_SPACING,B,L,merge_pts)
+        self.schedule = BaseScheduler(self)
         
-        # Create agents
-        for i in range(self.num_agents):
-            a = MoneyAgent(i, self)
-            self.schedule.add(a)
-            # Add the agent to a random grid cell
-            x = random.randrange(self.grid.width)
-            y = random.randrange(self.grid.height)
-            self.grid.place_agent(a, (x,y))
+        # Create booths
+        for i in range(1,B+1):
+            b = Booth(i, self, i)
+            self.schedule.add(b)
+            
+        # Remove out-of-bounds vehicles
+        for agent in self.schedule.agents[:]:
+            if agent.unique_id > B:
+                if self.map.out_of_bounds(agent.pos):
+                    self.schedule.remove(agent)
         
-        self.datacollector = DataCollector(
-            model_reporters={"Gini": compute_gini},
-            agent_reporters={"Wealth": lambda a: a.wealth})
+        #self.datacollector = DataCollector(
+        #    model_reporters={"Gini": compute_gini},
+        #    agent_reporters={"Wealth": lambda a: a.wealth})
 
     def step(self):
         '''Advance the model by one step.'''
         self.datacollector.collect(self)        
         self.schedule.step()
+        self.time += self.dt
 
