@@ -27,7 +27,7 @@ class Booth(Agent):
         self.count = 0
         self.queue = 0
         self.time = 0
-        self.wait_time = 10 #sec
+        self.wait_time = 2 #sec
         self.vel = 0
         
     def open_gate(self):
@@ -38,6 +38,7 @@ class Booth(Agent):
         self.model.schedule.add(v)
         self.model.map.place_agent(v, (0,self.pos[1]))
         self.time = self.wait_time
+        self.queue -= 1
         self.count += 1
         
     def take_toll(self):
@@ -61,7 +62,7 @@ class Vehicle(Agent):
         self.width = 6 #feet
         self.length = 15 # feet
         self.max_speed = 30*1.46667 #feet/sec
-        self.accel = 10*1.46667
+        self.accel = 6*1.46667
         self.decel = 10*1.46667
         self.merge_vel = 5*1.46667
         
@@ -100,16 +101,22 @@ class Vehicle(Agent):
                 self.merging = False
         else:
             safe = True
-            if lead_car.x_vel - self.x_vel < -8:
+            if lead_car.x_vel - self.x_vel < -10:
                 if lead_car.pos[0] - lead_car.length - x < 27:
+                    self.brake()
                     safe = False
             elif lag_car != self and x - self.length - lag_car.pos[0] < 8:
+                safe = False
+            elif lead_car != self and lead_car.pos[0] - lead_car.length - x < 20:
+                self.brake()                
                 safe = False
             if safe:
                 direction = 2*(self.line < self.goal)-1
                 self.y_vel = direction*self.merge_vel
                 self.merging = True
-    
+            #else:
+            #    print('HELL YEAH')
+                
     def move(self):
         dt = self.model.dt
         x = self.pos[0]
@@ -134,28 +141,36 @@ class Vehicle(Agent):
                 if isinstance(car,Vehicle) and car.unique_id != self.unique_id:
                     if car.line == self.goal or \
                         car.merging and car.goal == self.goal:
-                            if x < car.pos[0] < lead_car.pos[0]:
-                                lead_car = car
-                            elif lag_car.pos[0] < car.pos[0] < x:
-                                lag_car = car
+                            if x < car.pos[0]:
+                                if lead_car.unique_id != self.unique_id:
+                                    if car.pos[0] < lead_car.pos[0]:
+                                        lead_car = car
+                                else:
+                                    lead_car = car
+                            elif x > car.pos[0]:
+                                if lag_car.unique_id != self.unique_id:
+                                    if car.pos[0] > lag_car.pos[0]:
+                                        lead_car = car
+                                else:
+                                    lag_car = car
             self.merge(lag_car,lead_car)
             if not self.merging and lane_end <= x + stop_dist + 1:
                 self.brake()
+        #else:
+        blocked = False
+        for car in self.model.schedule.agents:
+            if isinstance(car,Vehicle) and car.unique_id != self.unique_id:
+                if car.line == self.line or \
+                    (car.merging and car.goal == self.line):
+#                            if 0 < (car.pos[0] - x - 2*car.length + car.x_vel*stop_time) \
+                        if 0 < (car.pos[0] - x - car.length + car.x_vel*stop_time/4) \
+                        <= stop_dist + 1:
+                            blocked = True
+                            break
+        if blocked:
+            self.brake()
         else:
-            # 'Decision Tree' for safe merging
-            blocked = False
-            for car in self.model.schedule.agents:
-                if isinstance(car,Vehicle) and car.unique_id != self.unique_id:
-                    if car.line == self.line or \
-                        (car.merging and car.goal == self.line):
-                            if 0 < (car.pos[0] - x - car.length + car.x_vel*stop_time) \
-                            <= stop_dist + 1:
-                                blocked = True
-                                break
-            if blocked:
-                self.brake()
-            else:
-                self.accelerate()
+            self.accelerate()
         self.move()
         
 def traffic_arrival(model):
