@@ -76,7 +76,7 @@ for i in range(200):
 
     for car_id in positions_by_step.index.values:
         car_pos = positions_by_step.loc[car_id,'Position']
-        ax.add_artist(plt.Circle(car_pos, 4, fc='r'))
+        ax.add_artist(plt.Rectangle(car_pos, 15, 6, fc='r'))
 
     plt.draw()
     plt.pause(0.0000000001)
