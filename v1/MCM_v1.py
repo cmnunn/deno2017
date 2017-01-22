@@ -66,7 +66,7 @@ class Vehicle(Agent):
     def brake(self):
         #decrease velocity
         dt = self.model.dt
-        self.x_vel -= self.decel*dt
+        self.x_vel = max(self.x_vel - self.decel*dt,0)
         
     def accelerate(self):
         #increase velocity
@@ -75,10 +75,10 @@ class Vehicle(Agent):
         
     def get_new_goal(self):
         '''find a new lane'''
-        pass
+        return
         
     def merge(self):
-        pass
+        return
     
     def move(self):
         dt = self.model.dt
@@ -108,13 +108,15 @@ class Vehicle(Agent):
         if blocked:
             self.brake()
         #if current lane will end
-        elif self.model.map.merge_pts[self.line] <= stop_dist +1:
+        elif self.model.map.merge_pts[self.line] - x <= stop_dist + 1:
             self.get_new_goal() #update goal
             #check speed and locations of surrounding cars
             #if safe, merge
-            self.merge()
+            if False:
+                self.merge()
             #else, brake
-            self.brake()
+            else:
+                self.brake()
         #else space ahead is free
         else:
             #accelerate/maintain speed
@@ -138,6 +140,7 @@ class TollBoothModel(Model):
             b = Booth(i, self)
             self.schedule.add(b)
             self.map.place_agent(b, (0,(i-1/2)*LANE_WIDTH))
+            print(b.unique_id)
         
         self.datacollector = DataCollector(
             model_reporters={},
@@ -146,16 +149,19 @@ class TollBoothModel(Model):
     def step(self):
         '''Advance the model by one step.'''
         # TollBooth Control Algorithm
-        for agent in self.schedule.agents[:]:
-            #if agent.unique_id <= self.map.B:
+        for agent in self.schedule.agents:
             if isinstance(agent,Booth):
-                if agent.unique_id == 1 and self.schedule.steps % 50 == 0:
+                if agent.unique_id == 1 and self.schedule.steps % 80 == 0:
                     agent.open_gate()
-                if agent.unique_id == 2 and self.schedule.steps % 50 == 0:
+                elif agent.unique_id == 2 and self.schedule.steps % 80 == 0:
                     agent.open_gate()
+                    
+        #for agent in self.schedule.agents:
+        #    if isinstance(agent,Vehicle):
+        #        
                     
         self.datacollector.collect(self)        
         self.schedule.step()
         self.time += self.dt
-        print(round(self.time,2))
+        #print(round(self.time,2))
 

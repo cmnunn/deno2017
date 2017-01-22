@@ -8,7 +8,7 @@ from MCM_v1 import TollBoothModel
 import numpy as np
 
 #Time parameter(s)
-dt = 0.01 #sec
+dt = 0.05 #sec
 
 # Map parameters
 B = 2 #2 booths
@@ -36,11 +36,16 @@ for i in range(2*B-1):
 #Test
 merge_pts[0] = 500 #feet
 merge_pts[1] = 500
+merge_pts[2] = 500
 
 model = TollBoothModel(550, LANE_WIDTH, B, L, merge_pts, line_pos, dt)
 
-for i in range(300):
+for i in range(400):
     model.step()
     
 vehicle_pos = model.datacollector.get_agent_vars_dataframe()
-vehicle_pos.plot()
+one_car = vehicle_pos.xs(1000, level="AgentID")
+one_car.Position.plot()
+#print(vehicle_pos.shape)
+#print(vehicle_pos.values[0:30])
+#vehicle_pos.plot()
