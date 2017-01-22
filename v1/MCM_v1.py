@@ -8,7 +8,7 @@ from mesa import Agent, Model
 from mesa.time import BaseScheduler
 from mesa.space import ContinuousSpace
 from mesa.datacollection import DataCollector
-#import random
+import random as rng
 #import numpy as np
 
 class Map(ContinuousSpace):
@@ -25,16 +25,25 @@ class Booth(Agent):
     def __init__(self, lane, model):
         super().__init__(lane, model)
         self.count = 0
-        #self.y = (lane-1/2)*self.model.map.LANE_WIDTH
+        self.queue = 0
+        self.time = 0
+        self.wait_time = 10 #sec
         self.vel = 0
         
     def open_gate(self):
+        if not self.queue:
+            return
         lane = self.unique_id
         v = Vehicle(lane*1000+self.count, self.model, self.vel, 2*(lane-1))
         self.model.schedule.add(v)
-        #self.model.map.place_agent(v, (0,self.y))
         self.model.map.place_agent(v, (0,self.pos[1]))
+        self.time = self.wait_time
         self.count += 1
+        
+    def take_toll(self):
+        if not self.queue:
+            return
+        self.time -= self.model.dt
         
     def get_y(self):
         return self.y
@@ -79,20 +88,27 @@ class Vehicle(Agent):
         self.goal = self.line+2*merge_left-1
         #print(self.goal)
         
-    def merge(self):
-        #print(self.goal)
+    def merge(self,lag_car,lead_car):
+        x = self.pos[0]
+        y = self.pos[1]
         if self.merging:
-            print(self.line,self.goal)
-            y = self.pos[1]
             arr = self.model.map.line_pos
             if abs(y-arr[self.goal]) <= 0.5:
                 self.line = self.goal
+                self.model.map.place_agent(self, (x,arr[self.line]))
                 self.y_vel = 0
                 self.merging = False
         else:
-            direction = 2*(self.line < self.goal)-1
-            self.y_vel = direction*self.merge_vel
-            self.merging = True
+            safe = True
+            if lead_car.x_vel - self.x_vel < -8:
+                if lead_car.pos[0] - lead_car.length - x < 27:
+                    safe = False
+            elif lag_car != self and x - self.length - lag_car.pos[0] < 8:
+                safe = False
+            if safe:
+                direction = 2*(self.line < self.goal)-1
+                self.y_vel = direction*self.merge_vel
+                self.merging = True
     
     def move(self):
         dt = self.model.dt
@@ -103,38 +119,56 @@ class Vehicle(Agent):
         except Exception:
             self.model.schedule.remove(self)
     
-    def step(self):
+    def step(self): 
         x = self.pos[0]
         stop_time = self.x_vel/self.decel
         stop_dist = self.x_vel*stop_time/2
-        blocked = False
-        #if path ahead blocked
-        for car in self.model.schedule.agents:
-            if isinstance(car,Vehicle) and car.unique_id != self.unique_id:
-                if car.line == self.line or \
-                    (self.merging and car.line == self.goal) or \
-                    (car.merging and car.goal == self.line):
-                        if 0 < (car.pos[0] - x - car.length + car.x_vel*stop_time) \
-                        <= stop_dist + 1:
-                            blocked = True
-                            break
-        if blocked:
-            self.brake()
-        #if current lane will end
-        elif 0 < self.model.map.merge_pts[self.line] <= x + stop_dist + 1:
+        lane_end = self.model.map.merge_pts[self.goal]
+        #if lane is ending
+        if self.merging or 0 < lane_end <= x + 2*stop_dist:
             self.get_new_goal() #update goal
             #if safe, merge
-            if True:
-                self.merge()
-            #else, brake
-            else:
+            lead_car = self
+            lag_car = self
+            for car in self.model.schedule.agents:
+                if isinstance(car,Vehicle) and car.unique_id != self.unique_id:
+                    if car.line == self.goal or \
+                        car.merging and car.goal == self.goal:
+                            if x < car.pos[0] < lead_car.pos[0]:
+                                lead_car = car
+                            elif lag_car.pos[0] < car.pos[0] < x:
+                                lag_car = car
+            self.merge(lag_car,lead_car)
+            if not self.merging and lane_end <= x + stop_dist + 1:
                 self.brake()
-        #else space ahead is free
         else:
-            #accelerate/maintain speed
-            self.accelerate()
+            # 'Decision Tree' for safe merging
+            blocked = False
+            for car in self.model.schedule.agents:
+                if isinstance(car,Vehicle) and car.unique_id != self.unique_id:
+                    if car.line == self.line or \
+                        (car.merging and car.goal == self.line):
+                            if 0 < (car.pos[0] - x - car.length + car.x_vel*stop_time) \
+                            <= stop_dist + 1:
+                                blocked = True
+                                break
+            if blocked:
+                self.brake()
+            else:
+                self.accelerate()
         self.move()
-        #print('Vehicle ',self.unique_id,' is @', x,' ft.')
+        
+def traffic_arrival(model):
+    #time = model.schedule.steps
+    total_count = 0
+    total_queue = 0
+    for agent in model.schedule.agents:
+        if isinstance(agent,Booth):
+            if rng.random() > 0.95:    
+                agent.queue += 1
+            total_count += agent.count
+            total_queue += agent.queue
+    return(total_queue,total_count)
 
 class TollBoothModel(Model):
     """A model with some number of agents."""
@@ -151,22 +185,21 @@ class TollBoothModel(Model):
             self.map.place_agent(b, (0,(i-1/2)*LANE_WIDTH))
         
         self.datacollector = DataCollector(
-            model_reporters={},
+            model_reporters={"Traffic Count": traffic_arrival},
             agent_reporters={"Position": lambda v: v.pos})
 
     def step(self):
         '''Advance the model by one step.'''
+        traffic_arrival(self)
         # TollBooth Control Algorithm
         for agent in self.schedule.agents:
             if isinstance(agent,Booth):
-                if agent.unique_id == 1 and self.schedule.steps % 80 == 0:
-                    agent.open_gate()
-                elif agent.unique_id == 2 and self.schedule.steps % 80 == 0:
-                    agent.open_gate()
-                    
-        #for agent in self.schedule.agents:
-        #    if isinstance(agent,Vehicle):
-        #        
+                agent.take_toll()
+                if agent.time <= 0:
+                    if agent.unique_id == 1: #and self.schedule.steps % 80 == 0:
+                        agent.open_gate()
+                    elif agent.unique_id == 2: #and self.schedule.steps % 80 == 0:
+                        agent.open_gate()   
                     
         self.datacollector.collect(self)        
         self.schedule.step()

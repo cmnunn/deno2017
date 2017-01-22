@@ -63,7 +63,7 @@ class MoneyModel(Model):
         
         self.datacollector = DataCollector(
             model_reporters={"Gini": compute_gini},
-            agent_reporters={"Wealth": lambda a: a.wealth})
+            agent_reporters={"Wealth": lambda a: a.wealth)
 
     def step(self):
         '''Advance the model by one step.'''

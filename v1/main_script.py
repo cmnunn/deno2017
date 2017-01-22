@@ -23,16 +23,16 @@ for i in range(2*B-1):
 #Free (default, comment other cases)
 
 #Left
-merge_pts[0] = 100 #feet
-merge_pts[1] = 200
+#merge_pts[0] = 100 #feet
+#merge_pts[1] = 200
 
 #Right
-#merge_pts[2] = 10
-#merge_pts[1] = 20
+#merge_pts[2] = 100
+#merge_pts[1] = 200
 
 #Centered
-#merge_pts[0] = 20
-#merge_pts[2] = 20
+merge_pts[0] = 200
+merge_pts[2] = 200
 
 #Test
 #merge_pts[0] = 500 #feet
@@ -45,13 +45,26 @@ for i in range(600):
     model.step()
     
 vehicle_pos = model.datacollector.get_agent_vars_dataframe()
+frame = vehicle_pos.loc[100,'AgentID':'Position']
+print(frame.values)
+for a in frame:
+    print(a)
 one_car = vehicle_pos.xs(1000, level="AgentID")
-print(one_car.values)
+xvals = np.zeros(len(one_car))
+yvals = np.zeros(len(one_car))
+for i in range(len(one_car.values)):
+    duple = one_car.values[i][0]
+    #print(duple)
+    xvals[i] = duple[0]
+    yvals[i] = duple[1]
+plt.plot(xvals,yvals)
 two_car = vehicle_pos.xs(2000, level="AgentID")
-print(two_car.values)
-#two_car.Position.plot()
-#print(vehicle_pos.shape)
-#print(vehicle_pos.values[0:30])
-#vehicle_pos.plot()
+xvals = np.zeros(len(two_car))
+yvals = np.zeros(len(two_car))
+for i in range(len(two_car.values)):
+    duple = two_car.values[i][0]
+    #print(duple)
+    xvals[i] = duple[0]
+    yvals[i] = duple[1]
+plt.plot(xvals,yvals)
 
-plt.show()
