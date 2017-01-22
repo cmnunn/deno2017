@@ -6,6 +6,7 @@ Created on Fri Jan 20 20:23:24 2017
 """
 from MCM_v1 import TollBoothModel
 import numpy as np
+import matplotlib.pyplot as plt
 
 #Time parameter(s)
 dt = 0.05 #sec
@@ -49,3 +50,5 @@ one_car.Position.plot()
 #print(vehicle_pos.shape)
 #print(vehicle_pos.values[0:30])
 #vehicle_pos.plot()
+
+plt.show()
