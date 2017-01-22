@@ -66,5 +66,20 @@ for i in range(len(two_car.values)):
     #print(duple)
     xvals[i] = duple[0]
     yvals[i] = duple[1]
-plt.plot(xvals,yvals)
+#plt.plot(xvals,yvals)
+
+plt.ion()
+fig = plt.figure()
+ax = plt.axes(xlim=(0,600),ylim=(0,24))
+for i in range(200):
+    positions_by_step = vehicle_pos.loc[min(3*i,600),'Agent':'Position']
+
+    for car_id in positions_by_step.index.values:
+        car_pos = positions_by_step.loc[car_id,'Position']
+        ax.add_artist(plt.Circle(car_pos, 4, fc='r'))
+
+    plt.draw()
+    plt.pause(0.0000000001)
+    plt.cla()
+
 
