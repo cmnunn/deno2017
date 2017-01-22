@@ -75,12 +75,15 @@ class Vehicle(Agent):
         
     def get_new_goal(self):
         arr = self.model.map.merge_pts
-        merge_left = self.line > 0 and 0 < arr[self.line-1] < arr[self.line]
+        merge_left = self.line == 0 or 0 < arr[self.line-1] < arr[self.line]
         self.goal = self.line+2*merge_left-1
+        #print(self.goal)
         
     def merge(self):
+        #print(self.goal)
         if self.merging:
-            y = self.pos[0]
+            print(self.line,self.goal)
+            y = self.pos[1]
             arr = self.model.map.line_pos
             if abs(y-arr[self.goal]) <= 0.5:
                 self.line = self.goal
@@ -118,9 +121,8 @@ class Vehicle(Agent):
         if blocked:
             self.brake()
         #if current lane will end
-        elif self.model.map.merge_pts[self.line] - x <= stop_dist + 1:
+        elif 0 < self.model.map.merge_pts[self.line] <= x + stop_dist + 1:
             self.get_new_goal() #update goal
-            #check speed and locations of surrounding cars
             #if safe, merge
             if True:
                 self.merge()
