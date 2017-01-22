@@ -74,11 +74,22 @@ class Vehicle(Agent):
         self.x_vel = min(self.x_vel + self.accel*dt,self.max_speed)
         
     def get_new_goal(self):
-        '''find a new lane'''
-        return
+        arr = self.model.map.merge_pts
+        merge_left = self.line > 0 and 0 < arr[self.line-1] < arr[self.line]
+        self.goal = self.line+2*merge_left-1
         
     def merge(self):
-        return
+        if self.merging:
+            y = self.pos[0]
+            arr = self.model.map.line_pos
+            if abs(y-arr[self.goal]) <= 0.5:
+                self.line = self.goal
+                self.y_vel = 0
+                self.merging = False
+        else:
+            direction = 2*(self.line < self.goal)-1
+            self.y_vel = direction*self.merge_vel
+            self.merging = True
     
     def move(self):
         dt = self.model.dt
@@ -93,18 +104,17 @@ class Vehicle(Agent):
         x = self.pos[0]
         stop_time = self.x_vel/self.decel
         stop_dist = self.x_vel*stop_time/2
-        nbrs = self.model.map.get_neighbors(self.pos,2*stop_dist,False)
         blocked = False
         #if path ahead blocked
-        for car in nbrs:
-            if isinstance(car,Vehicle):
+        for car in self.model.schedule.agents:
+            if isinstance(car,Vehicle) and car.unique_id != self.unique_id:
                 if car.line == self.line or \
                     (self.merging and car.line == self.goal) or \
                     (car.merging and car.goal == self.line):
-                        if car.pos[0] + car.x_vel*stop_time - x - car.length \
-                                                        <= stop_dist + 1:
-                                                            blocked = True
-                                                            break
+                        if 0 < (car.pos[0] - x - car.length + car.x_vel*stop_time) \
+                        <= stop_dist + 1:
+                            blocked = True
+                            break
         if blocked:
             self.brake()
         #if current lane will end
@@ -112,7 +122,7 @@ class Vehicle(Agent):
             self.get_new_goal() #update goal
             #check speed and locations of surrounding cars
             #if safe, merge
-            if False:
+            if True:
                 self.merge()
             #else, brake
             else:
@@ -121,9 +131,6 @@ class Vehicle(Agent):
         else:
             #accelerate/maintain speed
             self.accelerate()
-        #update merging status
-        if self.y_vel != 0:
-            self.merging = True
         self.move()
         #print('Vehicle ',self.unique_id,' is @', x,' ft.')
 
@@ -140,11 +147,10 @@ class TollBoothModel(Model):
             b = Booth(i, self)
             self.schedule.add(b)
             self.map.place_agent(b, (0,(i-1/2)*LANE_WIDTH))
-            print(b.unique_id)
         
         self.datacollector = DataCollector(
             model_reporters={},
-            agent_reporters={"Position": lambda v: v.pos[0]})
+            agent_reporters={"Position": lambda v: v.pos})
 
     def step(self):
         '''Advance the model by one step.'''

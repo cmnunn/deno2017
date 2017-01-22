@@ -23,8 +23,8 @@ for i in range(2*B-1):
 #Free (default, comment other cases)
 
 #Left
-#merge_pts[0] = 10 #feet
-#merge_pts[1] = 20
+merge_pts[0] = 100 #feet
+merge_pts[1] = 200
 
 #Right
 #merge_pts[2] = 10
@@ -35,18 +35,20 @@ for i in range(2*B-1):
 #merge_pts[2] = 20
 
 #Test
-merge_pts[0] = 500 #feet
-merge_pts[1] = 500
-merge_pts[2] = 500
+#merge_pts[0] = 500 #feet
+#merge_pts[1] = 500
+#merge_pts[2] = 500
 
 model = TollBoothModel(550, LANE_WIDTH, B, L, merge_pts, line_pos, dt)
 
-for i in range(400):
+for i in range(600):
     model.step()
     
-vehicle_pos = model.datacollector.get_agent_vars_dataframe()
-one_car = vehicle_pos.xs(1000, level="AgentID")
-one_car.Position.plot()
+#vehicle_pos = model.datacollector.get_agent_vars_dataframe()
+#one_car = vehicle_pos.xs(1000, level="AgentID")
+#one_car.Position.plot()
+#two_car = vehicle_pos.xs(1001, level="AgentID")
+#two_car.Position.plot()
 #print(vehicle_pos.shape)
 #print(vehicle_pos.values[0:30])
 #vehicle_pos.plot()
