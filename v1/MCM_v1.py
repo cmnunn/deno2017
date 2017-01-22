@@ -7,17 +7,17 @@ Created on Fri Jan 20 14:11:55 2017
 from mesa import Agent, Model
 from mesa.time import BaseScheduler
 from mesa.space import ContinuousSpace
-#from mesa.datacollection import DataCollector
+from mesa.datacollection import DataCollector
 #import random
 #import numpy as np
 
 class Map(ContinuousSpace):
     """Space of the toll plaza, with defined lanes & bounds"""
-    def __init__(self, width, LANE_WIDTH, LANE_SPACING, B, L, merge_pts):
-        super().__init__(width, B*LANE_WIDTH+(B-1)*LANE_SPACING, False)
+    def __init__(self, width, LANE_WIDTH, B, L, merge_pts, line_pos):
+        super().__init__(width, B*LANE_WIDTH, False)
         self.LANE_WIDTH = LANE_WIDTH
-        self.LANE_SPACING = LANE_SPACING
         self.B = B
+        self.line_pos = line_pos
         self.merge_pts = merge_pts
 
 class Booth(Agent):
@@ -25,15 +25,15 @@ class Booth(Agent):
     def __init__(self, lane, model):
         super().__init__(lane, model)
         self.count = 0
-        self.y = lane*self.model.map.LANE_WIDTH/2 + \
-                (lane-1)*self.model.map.LANE_SPACING
+        #self.y = (lane-1/2)*self.model.map.LANE_WIDTH
         self.vel = 0
         
     def open_gate(self):
         lane = self.unique_id
-        v = Vehicle(lane*1000+self.count, self.model, self.vel, lane)
+        v = Vehicle(lane*1000+self.count, self.model, self.vel, 2*(lane-1))
         self.model.schedule.add(v)
-        self.model.map.place_agent(v, (0,self.y))
+        #self.model.map.place_agent(v, (0,self.y))
+        self.model.map.place_agent(v, (0,self.pos[1]))
         self.count += 1
         
     def get_y(self):
@@ -45,31 +45,37 @@ class Booth(Agent):
 
 class Vehicle(Agent):
     """An agent with fixed initial wealth."""
-    def __init__(self, unique_id, model, vel, lane):
+    def __init__(self, unique_id, model, vel, line):
         super().__init__(unique_id, model)
+        #physical attributes
         self.id = unique_id
-        self.lane = lane
-        self.width = 8 #feet
+        self.width = 6 #feet
         self.length = 15 # feet
+        self.max_speed = 30*1.46667 #feet/sec
+        self.accel = 10*1.46667
+        self.decel = 10*1.46667
+        self.merge_vel = 5*1.46667
+        
+        #state attributes
+        self.line = line
+        self.goal = line
+        self.merging = False
         self.x_vel = vel
         self.y_vel = 0
-        self.max_speed = 30*1.46667 #feet/sec
         
     def brake(self):
         #decrease velocity
-        self.x_vel = 0
+        dt = self.model.dt
+        self.x_vel -= self.decel*dt
         
-    def accel(self):
+    def accelerate(self):
         #increase velocity
-        self.x_vel = self.max_speed
+        dt = self.model.dt
+        self.x_vel = min(self.x_vel + self.accel*dt,self.max_speed)
         
-    def get_merge_direction(self):
-        '''returns True if the next lane to merge to is left (False if Right)'''
-        x = self.pos[0]
-        roads = self.model.map
-        arr = roads.merge_pts
-        return(self.lane < roads.B and \
-                (arr[2*int(self.lane)] == 0 or arr[2*int(self.lane)] > x))
+    def get_new_goal(self):
+        '''find a new lane'''
+        pass
         
     def merge(self):
         pass
@@ -78,53 +84,78 @@ class Vehicle(Agent):
         dt = self.model.dt
         x = self.pos[0]
         y = self.pos[1]
-        self.model.map.move_agent(self, (x+dt*self.x_vel,y+dt*self.y_vel))
+        try:
+            self.model.map.move_agent(self, (x+dt*self.x_vel,y+dt*self.y_vel))
+        except Exception:
+            self.model.schedule.remove(self)
     
     def step(self):
-        #check if lane has ended
         x = self.pos[0]
-        arr = self.model.map.merge_pts
-        if 0 < arr[2*int(self.lane-1)] <= x:
-            if self.x_vel > 0:
-                self.brake()
-            else:
-                self.merge()
+        stop_time = self.x_vel/self.decel
+        stop_dist = self.x_vel*stop_time/2
+        nbrs = self.model.map.get_neighbors(self.pos,2*stop_dist,False)
+        blocked = False
+        #if path ahead blocked
+        for car in nbrs:
+            if isinstance(car,Vehicle):
+                if car.line == self.line or \
+                    (self.merging and car.line == self.goal) or \
+                    (car.merging and car.goal == self.line):
+                        if car.pos[0] + car.x_vel*stop_time - x - car.length \
+                                                        <= stop_dist + 1:
+                                                            blocked = True
+                                                            break
+        if blocked:
+            self.brake()
+        #if current lane will end
+        elif self.model.map.merge_pts[self.line] <= stop_dist +1:
+            self.get_new_goal() #update goal
+            #check speed and locations of surrounding cars
+            #if safe, merge
+            self.merge()
+            #else, brake
+            self.brake()
+        #else space ahead is free
         else:
-            self.accel()
+            #accelerate/maintain speed
+            self.accelerate()
+        #update merging status
+        if self.y_vel != 0:
+            self.merging = True
         self.move()
-        print('Vehicle ',self.unique_id,' is @', x,' ft.')
+        #print('Vehicle ',self.unique_id,' is @', x,' ft.')
 
 class TollBoothModel(Model):
     """A model with some number of agents."""
-    def __init__(self, width, LANE_WIDTH, LANE_SPACING, B, L, merge_pts, dt):
+    def __init__(self, width, LANE_WIDTH, B, L, merge_pts, line_pos, dt):
         self.dt = dt
         self.time = 0
-        self.map = Map(width,LANE_WIDTH,LANE_SPACING,B,L,merge_pts)
+        self.map = Map(width,LANE_WIDTH,B,L,merge_pts,line_pos)
         self.schedule = BaseScheduler(self)
         
         # Create booths
         for i in range(1,B+1):
             b = Booth(i, self)
             self.schedule.add(b)
+            self.map.place_agent(b, (0,(i-1/2)*LANE_WIDTH))
         
-        #self.datacollector = DataCollector(
-        #    model_reporters={"Gini": compute_gini},
-        #    agent_reporters={"Wealth": lambda a: a.wealth})
+        self.datacollector = DataCollector(
+            model_reporters={},
+            agent_reporters={"Position": lambda v: v.pos[0]})
 
     def step(self):
         '''Advance the model by one step.'''
-        # Remove out-of-bounds vehicles
+        # TollBooth Control Algorithm
         for agent in self.schedule.agents[:]:
-            if agent.unique_id > self.map.B: #is a vehicle
-                if self.map.out_of_bounds(agent.pos):
-                    self.schedule.remove(agent)
-            else:
-                if agent.unique_id == 1 and self.time % 5.0 == 0:
+            #if agent.unique_id <= self.map.B:
+            if isinstance(agent,Booth):
+                if agent.unique_id == 1 and self.schedule.steps % 50 == 0:
                     agent.open_gate()
-                if agent.unique_id == 2 and self.time % 8.0 == 0:
+                if agent.unique_id == 2 and self.schedule.steps % 50 == 0:
                     agent.open_gate()
                     
-        #self.datacollector.collect(self)        
+        self.datacollector.collect(self)        
         self.schedule.step()
         self.time += self.dt
+        print(round(self.time,2))
 
