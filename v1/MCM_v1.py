@@ -13,12 +13,13 @@ import random as rng
 
 class Map(ContinuousSpace):
     """Space of the toll plaza, with defined lanes & bounds"""
-    def __init__(self, width, LANE_WIDTH, B, L, merge_pts, line_pos):
+    def __init__(self, width, LANE_WIDTH, B, lanes, merge_pts, line_pos):
         super().__init__(width, B*LANE_WIDTH, False)
         self.LANE_WIDTH = LANE_WIDTH
         self.B = B
         self.line_pos = line_pos
         self.merge_pts = merge_pts
+        self.lanes = lanes
 
 class Booth(Agent):
     """Spawns vehicles according to control algorithms"""
@@ -27,7 +28,7 @@ class Booth(Agent):
         self.count = 0
         self.queue = 0
         self.time = 0
-        self.wait_time = 2 #sec
+        self.wait_time = 3 #sec
         self.vel = 0
         
     def open_gate(self):
@@ -52,6 +53,12 @@ class Booth(Agent):
     def get_vel(self):
         return self.vel
         
+class EZPass(Booth):
+    def __init__(self, lane, model):
+        super().__init__(lane, model)
+        self.wait_time = 0
+        self.vel = 45*1.46667
+        
 
 class Vehicle(Agent):
     """An agent with fixed initial wealth."""
@@ -61,14 +68,15 @@ class Vehicle(Agent):
         self.id = unique_id
         self.width = 6 #feet
         self.length = 15 # feet
-        self.max_speed = 30*1.46667 #feet/sec
-        self.accel = 6*1.46667
-        self.decel = 10*1.46667
-        self.merge_vel = 5*1.46667
+        self.max_speed = 60*1.46667 #feet/sec
+        self.accel = 6.6 #feet/sec^2
+        self.decel = 6.6
+        self.merge_vel = 4*1.46667
         
         #state attributes
         self.line = line
         self.goal = line
+        self.goal2 = line
         self.merging = False
         self.x_vel = vel
         self.y_vel = 0
@@ -83,11 +91,28 @@ class Vehicle(Agent):
         dt = self.model.dt
         self.x_vel = min(self.x_vel + self.accel*dt,self.max_speed)
         
-    def get_new_goal(self):
+    def get_new_goal(self,stop_dist):
         arr = self.model.map.merge_pts
-        merge_left = self.line == 0 or 0 < arr[self.line-1] < arr[self.line]
-        self.goal = self.line+2*merge_left-1
-        #print(self.goal)
+        #lanes = self.model.map.lanes
+        neighbors = [None if self.line < 2 else self.line-2, \
+                   None if self.line < 1 else self.line-1, \
+                   None if self.line >= len(arr)-2 else self.line+1, \
+                   None if self.line >= len(arr)-1 else self.line+2]
+        #print(neighbors)
+        options = []
+        for option in neighbors:
+            if option != None:
+                options.append(option)
+        #print(options)
+        final = []
+        best = arr[self.line]
+        for option in options:
+            if arr[option] >= best:
+                best = arr[option]
+        for option in options:
+            if arr[option] == best:
+                final.append(option)
+        self.goal = rng.choice(final)
         
     def merge(self,lag_car,lead_car):
         x = self.pos[0]
@@ -128,10 +153,10 @@ class Vehicle(Agent):
         x = self.pos[0]
         stop_time = self.x_vel/self.decel
         stop_dist = self.x_vel*stop_time/2
-        lane_end = self.model.map.merge_pts[self.goal]
+        lane_end = self.model.map.merge_pts[self.line]
         #if lane is ending
         if self.merging or 0 < lane_end <= x + 2*stop_dist:
-            self.get_new_goal() #update goal
+            self.get_new_goal(stop_dist) #update goal
             #if safe, merge
             lead_car = self
             lag_car = self
@@ -161,15 +186,16 @@ class Vehicle(Agent):
                 if car.line == self.line or \
                     (car.merging and car.goal == self.line):
 #                            if 0 < (car.pos[0] - x - 2*car.length + car.x_vel*stop_time) \
-                        if 0 < (car.pos[0] - x - car.length + car.x_vel*stop_time/4) \
-                        <= stop_dist + 1:
+                        if 0 < (car.pos[0] - x - car.length) <= stop_dist + 1 - car.x_vel*stop_time/4:
                             blocked = True
                             break
         if blocked:
             self.brake()
-        elif self.goal == self.line:
+        elif self.goal == self.line or self.merging:
             self.accelerate()
         self.move()
+        
+
         
 def traffic_arrival(model):
     #time = model.schedule.steps
@@ -177,18 +203,21 @@ def traffic_arrival(model):
     total_queue = 0
     for agent in model.schedule.agents:
         if isinstance(agent,Booth):
-            if rng.random() > 0.95:    
+            if rng.random() > 0.99:
                 agent.queue += 1
             total_count += agent.count
             total_queue += agent.queue
-    return(total_queue,total_count)
+    return total_count
+    
+def merging_vehicle_count(model):
+    return model.schedule.get_agent_count() - model.map.B
 
 class TollBoothModel(Model):
     """A model with some number of agents."""
-    def __init__(self, width, LANE_WIDTH, B, L, merge_pts, line_pos, dt):
+    def __init__(self, width, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt):
         self.dt = dt
         self.time = 0
-        self.map = Map(width,LANE_WIDTH,B,L,merge_pts,line_pos)
+        self.map = Map(width,LANE_WIDTH,B,lanes,merge_pts,line_pos)
         self.schedule = BaseScheduler(self)
         
         # Create booths
@@ -198,7 +227,8 @@ class TollBoothModel(Model):
             self.map.place_agent(b, (0,(i-1/2)*LANE_WIDTH))
         
         self.datacollector = DataCollector(
-            model_reporters={"Traffic Count": traffic_arrival},
+            model_reporters={"Current Car Count": merging_vehicle_count,
+                             "Cumulative Car Count": traffic_arrival},
             agent_reporters={"Position": lambda v: v.pos})
 
     def step(self):
@@ -212,7 +242,15 @@ class TollBoothModel(Model):
                     if agent.unique_id == 1: #and self.schedule.steps % 80 == 0:
                         agent.open_gate()
                     elif agent.unique_id == 2: #and self.schedule.steps % 80 == 0:
-                        agent.open_gate()   
+                        agent.open_gate()  
+                    elif agent.unique_id == 3:
+                        agent.open_gate()
+                    elif agent.unique_id == 4: #and self.schedule.steps % 80 == 0:
+                        agent.open_gate()
+                    elif agent.unique_id == 5: #and self.schedule.steps % 80 == 0:
+                        agent.open_gate()  
+                    elif agent.unique_id == 6:
+                        agent.open_gate()
                     
         self.datacollector.collect(self)        
         self.schedule.step()
