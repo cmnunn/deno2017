@@ -45,23 +45,34 @@ for i in range(steps):
     model.step()
     
 vehicle_pos = model.datacollector.get_agent_vars_dataframe()
+count_data = model.datacollector.get_model_vars_dataframe()
+plt.figure()
+count_data.plot()
+#cumulative = count_data.xs(99, level="Step")["Wealth"]
+#arr = np.transpose(count_data.values)
+#print(arr[0])
+#plt.figure()
+#plt.plot(range(1,5001),arr[0].tolist())
+#plt.plot(arr[1])
+plt.show()
+
 frame = vehicle_pos.loc[100,'AgentID':'Position']
 
-plt.ion()
-fig = plt.figure()
-ax = plt.axes(xlim=(0,model.map.width),ylim=(0,model.map.height))
-plot_rate = 4
-for i in range(math.floor(steps/plot_rate)):
-    positions_by_step = vehicle_pos.loc[min(plot_rate*i,steps),'Agent':'Position']
-
-    for car_id in positions_by_step.index.values:
-        car_pos = positions_by_step.loc[car_id,'Position']
-        color = 'r'
-        if car_id < B*2000:
-            color = 'b'
-        ax.add_artist(plt.Rectangle(car_pos, 15, 6, fc=color))
-
-    plt.draw()
-    plt.pause(0.0000000001)
-    plt.cla()
+#plt.ion()
+#fig = plt.figure()
+#ax = plt.axes(xlim=(0,model.map.width),ylim=(0,model.map.height))
+#plot_rate = 4
+#for i in range(math.floor(steps/plot_rate)):
+#    positions_by_step = vehicle_pos.loc[min(plot_rate*i,steps),'Agent':'Position']
+#
+#    for car_id in positions_by_step.index.values:
+#        car_pos = positions_by_step.loc[car_id,'Position']
+#        color = 'r'
+#        if car_id < B*2000:
+#            color = 'b'
+#        ax.add_artist(plt.Rectangle(car_pos, 15, 6, fc=color))
+#
+#    plt.draw()
+#    plt.pause(0.0000000001)
+#    plt.cla()
 
