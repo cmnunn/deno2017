@@ -8,7 +8,9 @@ from mesa import Agent, Model
 from mesa.time import BaseScheduler
 from mesa.space import ContinuousSpace
 from mesa.datacollection import DataCollector
+from scipy import integrate
 import random as rng
+from math import ceil
 #import numpy as np
 
 class Map(ContinuousSpace):
@@ -32,7 +34,7 @@ class Booth(Agent):
         self.vel = 0
         
     def open_gate(self):
-        if not self.queue:
+        if not self.queue or self.time > 0:
             return
         lane = self.unique_id
         v = Vehicle(lane*1000+self.count, self.model, self.vel, 2*(lane-1))
@@ -211,6 +213,24 @@ def traffic_arrival(model):
     
 def merging_vehicle_count(model):
     return model.schedule.get_agent_count() - model.map.B
+    
+def calc_capacity(model,merge_pts,lanes,width):
+    test = Vehicle(0,model,0,-1)
+    L = (test.max_speed**2)/(2*test.accel)
+    K1 = lambda x : 1/(test.length + 2*(2*test.accel*x)**0.5)
+    total = 0
+    for line in range(len(lanes)):
+        if lanes[line]:
+            l = min(merge_pts[line],width)
+            if line == 0 or line % 2 == 1 \
+            or (line % 2 == 0 and not lanes[line-1]):
+                total += integrate.quad(K1,0,min(l,L))[0]
+                total += max(0,l-L)/(test.length+2*test.max_speed)
+#            else:
+#                print(line)
+#                total += integrate.quad(K1,0,min(l,L))[0]
+#                total += max(0,l-L)/(test.length+2*test.max_speed)
+    return total
 
 class TollBoothModel(Model):
     """A model with some number of agents."""
@@ -219,6 +239,7 @@ class TollBoothModel(Model):
         self.time = 0
         self.map = Map(width,LANE_WIDTH,B,lanes,merge_pts,line_pos)
         self.schedule = BaseScheduler(self)
+        self.capacity = ceil(calc_capacity(self,merge_pts,lanes,width))
         
         # Create booths
         for i in range(1,B+1):
@@ -238,19 +259,21 @@ class TollBoothModel(Model):
         for agent in self.schedule.agents:
             if isinstance(agent,Booth):
                 agent.take_toll()
-                if agent.time <= 0:
-                    if agent.unique_id == 1: #and self.schedule.steps % 80 == 0:
-                        agent.open_gate()
-                    elif agent.unique_id == 2: #and self.schedule.steps % 80 == 0:
-                        agent.open_gate()  
-                    elif agent.unique_id == 3:
-                        agent.open_gate()
-                    elif agent.unique_id == 4: #and self.schedule.steps % 80 == 0:
-                        agent.open_gate()
-                    elif agent.unique_id == 5: #and self.schedule.steps % 80 == 0:
-                        agent.open_gate()  
-                    elif agent.unique_id == 6:
-                        agent.open_gate()
+                if merging_vehicle_count(self) <= self.capacity or \
+                agent.unique_id % 2 == 1:
+                    agent.open_gate()
+#                    if agent.unique_id == 1: #and self.schedule.steps % 80 == 0:
+#                        agent.open_gate()
+#                    elif agent.unique_id == 2: #and self.schedule.steps % 80 == 0:
+#                        agent.open_gate()  
+#                    elif agent.unique_id == 3:
+#                        agent.open_gate()
+#                    elif agent.unique_id == 4: #and self.schedule.steps % 80 == 0:
+#                        agent.open_gate()
+#                    elif agent.unique_id == 5: #and self.schedule.steps % 80 == 0:
+#                        agent.open_gate()  
+#                    elif agent.unique_id == 6:
+#                        agent.open_gate()
                     
         self.datacollector.collect(self)        
         self.schedule.step()
