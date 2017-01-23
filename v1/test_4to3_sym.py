@@ -38,21 +38,28 @@ track_length = 400
 
 dbl = False
 
-model = TollBoothModel(track_length,LANE_WIDTH,B,lanes,merge_pts,line_pos,dt,dbl)
+for runCount in range(10):
 
-#Print calculated capacity
-print(calc_capacity(model,merge_pts,lanes,track_length))
+    model = TollBoothModel(track_length,LANE_WIDTH,B,lanes,merge_pts,line_pos,dt,dbl)
 
-#5000 timesteps
-steps = 5000
+    #Print calculated capacity
+    print(calc_capacity(model,merge_pts,lanes,track_length))
 
-for i in range(steps):
-    model.step()
+    #5000 timesteps
+    steps = 5000
+
+    for i in range(steps):
+        model.step()
  
-vehicle_pos = model.datacollector.get_agent_vars_dataframe()
-count_data = model.datacollector.get_model_vars_dataframe()
-count_data.plot()
-plt.show()
+    count_data = model.datacollector.get_model_vars_dataframe()
+    outFile = 'test_4to3_sym/test_4to3_sym_run' + str(runCount) + '.txt'
+    wF = open(outFile, 'w')
+
+    for indexVal in count_data.index.values:
+        wF.write(str(count_data.loc[indexVal, 'Current Car Count']))
+        wF.write('\n')
+
+    wF.close()
 
 #plt.ion()
 #fig = plt.figure()

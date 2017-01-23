@@ -3,8 +3,11 @@ import plotly.graph_objs as go
 from plotly.offline import download_plotlyjs, plot
 import matplotlib.pyplot as plt
 
-RUN_TYPES = ['test_2to1_asym','test_2to1_sym','test_3to1_asym','test_4to3_sym','test_5to2_alt','test_5to2_asym','test_6to3_sym']
-RUN_TYPES = ['test_2to1_asym','test_2to1_sym','test_3to1_asym','test_4to3_sym','test_5to2_alt']
+RUN_TYPES = ['test_2to1_asym','test_2to1_sym','test_3to1_asym',
+             'test_4to3_sym','test_5to2_alt','test_5to2_asym',
+             'test_6to3_sym', 'test_2to1_asym_nogov','test_2to1_sym_nogov',
+             'test_3to1_asym_nogov','test_4to3_sym_nogov','test_5to2_alt_nogov',
+             'test_5to2_asym_nogov','test_6to3_sym_nogov']
 
 for RUN_TYPE in RUN_TYPES:
     
@@ -18,7 +21,7 @@ for RUN_TYPE in RUN_TYPES:
 
 
     # Read Values
-    for run_count in range(100):
+    for run_count in range(10):
         input_file = RUN_TYPE + '/' + RUN_TYPE + '_run' + str(run_count)  + '.txt'
   
         y_values = []
@@ -43,7 +46,7 @@ for RUN_TYPE in RUN_TYPES:
     
         step_values = []
 
-        for file_num in range(1,101):
+        for file_num in range(1,11):
             step_values.append(float(plot_values[file_num][i]))
 
         median_values.append(np.median(step_values))
@@ -73,7 +76,7 @@ for RUN_TYPE in RUN_TYPES:
 
 
     layout = go.Layout(
-        title = 'Run Type: ' + RUN_TYPE + '</br>100 Run Trial with Std. Dev.',
+        title = 'Run Type: ' + RUN_TYPE + '</br>10 Run Trial with Std. Dev.',
         autosize = True,
 
         titlefont = dict(size=24),
