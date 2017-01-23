@@ -103,19 +103,17 @@ class Vehicle(Agent):
             safe = True
             if lead_car.x_vel - self.x_vel < -10:
                 if lead_car.pos[0] - lead_car.length - x < 27:
-                    self.brake()
                     safe = False
             elif lag_car != self and x - self.length - lag_car.pos[0] < 8:
                 safe = False
-            elif lead_car != self and lead_car.pos[0] - lead_car.length - x < 20:
-                self.brake()                
+            elif lead_car != self and lead_car.pos[0] - lead_car.length - x < 20:               
                 safe = False
             if safe:
                 direction = 2*(self.line < self.goal)-1
                 self.y_vel = direction*self.merge_vel
                 self.merging = True
-            #else:
-            #    print('HELL YEAH')
+            else:
+                self.brake()
                 
     def move(self):
         dt = self.model.dt
@@ -169,7 +167,7 @@ class Vehicle(Agent):
                             break
         if blocked:
             self.brake()
-        else:
+        elif self.goal == self.line:
             self.accelerate()
         self.move()
         
