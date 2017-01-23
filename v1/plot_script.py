@@ -4,7 +4,7 @@ from plotly.offline import download_plotlyjs, plot
 import matplotlib.pyplot as plt
 
 RUN_TYPES = ['test_2to1_asym','test_2to1_sym','test_3to1_asym','test_4to3_sym','test_5to2_alt','test_5to2_asym','test_6to3_sym']
-#RUN_TYPES = ['test_2to1_asym','test_2to1_sym','test_3to1_asym','test_4to3_sym']
+RUN_TYPES = ['test_2to1_asym','test_2to1_sym','test_3to1_asym','test_4to3_sym','test_5to2_alt']
 
 for RUN_TYPE in RUN_TYPES:
     
@@ -18,7 +18,7 @@ for RUN_TYPE in RUN_TYPES:
 
 
     # Read Values
-    for run_count in range(10):
+    for run_count in range(100):
         input_file = RUN_TYPE + '/' + RUN_TYPE + '_run' + str(run_count)  + '.txt'
   
         y_values = []
@@ -43,7 +43,7 @@ for RUN_TYPE in RUN_TYPES:
     
         step_values = []
 
-        for file_num in range(10):
+        for file_num in range(1,101):
             step_values.append(float(plot_values[file_num][i]))
 
         median_values.append(np.median(step_values))
