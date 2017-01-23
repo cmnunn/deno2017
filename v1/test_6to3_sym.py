@@ -4,7 +4,7 @@ Created on Fri Jan 20 20:23:24 2017
 
 @author: cmnunn
 """
-from MCM_69007 import TollBoothModel
+from MCM_69007 import *
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -39,7 +39,9 @@ merge_pts[10] = 100
 
 track_length = 700
 
-model = TollBoothModel(track_length, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt)
+dbl = False
+
+model = TollBoothModel(track_length,LANE_WIDTH,B,lanes,merge_pts,line_pos,dt,dbl)
 
 #Print calculated capacity
 print(calc_capacity(model,merge_pts,lanes,track_length))

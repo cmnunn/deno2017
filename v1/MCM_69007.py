@@ -231,12 +231,14 @@ def calc_capacity(model,merge_pts,lanes,width):
 
 class TollBoothModel(Model):
     """A model with some number of agents."""
-    def __init__(self, width, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt):
+    def __init__(self, width, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt, double):
         self.dt = dt
         self.time = 0
         self.map = Map(width,LANE_WIDTH,B,lanes,merge_pts,line_pos)
         self.schedule = BaseScheduler(self)
         self.capacity = floor(calc_capacity(self,merge_pts,lanes,width))-ceil(B/2)
+        if double:
+            self.capacity = 2*self.capacity
         
         # Create booths
         for i in range(1,B+1):

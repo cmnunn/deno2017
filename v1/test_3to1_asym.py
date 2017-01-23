@@ -34,7 +34,9 @@ merge_pts[4] = float('inf')
 
 track_length = 400
 
-model = TollBoothModel(track_length, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt)
+dbl = False
+
+model = TollBoothModel(track_length,LANE_WIDTH,B,lanes,merge_pts,line_pos,dt,dbl)
 
 #Print calculated capacity
 print(calc_capacity(model,merge_pts,lanes,track_length))
