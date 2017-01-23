@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jan 20 14:11:55 2017
-
-@author: cmnunn
+MCM 2017
+Problem B
+Team 69007
 """
 from mesa import Agent, Model
 from mesa.time import BaseScheduler
@@ -11,7 +11,6 @@ from mesa.datacollection import DataCollector
 from scipy import integrate
 import random as rng
 from math import floor,ceil
-#import numpy as np
 
 class Map(ContinuousSpace):
     """Space of the toll plaza, with defined lanes & bounds"""
@@ -32,8 +31,9 @@ class Booth(Agent):
         self.time = 0
         self.wait_time = 3 #sec
         self.vel = 0
-        
+    
     def open_gate(self):
+        '''if the 'queue' is nonempty, spawn a car at the head of the lane'''
         if not self.queue or self.time > 0:
             return
         lane = self.unique_id
@@ -45,6 +45,7 @@ class Booth(Agent):
         self.count += 1
         
     def take_toll(self):
+        '''take toll, i.e. run clock down until next car can spawn'''
         if not self.queue:
             return
         self.time -= self.model.dt
@@ -85,29 +86,29 @@ class Vehicle(Agent):
         self.y_vel = 0
         
     def brake(self):
-        #decrease velocity
+        '''decrease velocity according to decel'''
         dt = self.model.dt
         self.x_vel = max(self.x_vel - self.decel*dt,0)
         
     def accelerate(self):
-        #increase velocity
+        '''increase velocity according to accel'''
         dt = self.model.dt
         self.x_vel = min(self.x_vel + self.accel*dt,self.max_speed)
         
     def get_new_goal(self,stop_dist):
+        '''decide which lane the car should merge into based on merge_pts array'''
         arr = self.model.map.merge_pts
-        #lanes = self.model.map.lanes
         neighbors = [None if self.line < 2 else self.line-2, \
                    None if self.line < 1 else self.line-1, \
                    None if self.line >= len(arr)-2 else self.line+1, \
                    None if self.line >= len(arr)-1 else self.line+2]
-        #print(neighbors)
         options = []
+        #Eliminate neighbors beyond the edge of the road
         for option in neighbors:
             if option != None:
                 options.append(option)
-        #print(options)
         final = []
+        #Find neighbor whose lane ends the furthest ahead
         best = arr[self.line]
         for option in options:
             if arr[option] >= best:
@@ -118,6 +119,7 @@ class Vehicle(Agent):
         self.goal = rng.choice(final)
         
     def merge(self,lag_car,lead_car):
+        '''check if merge is safe; if already merging, advance to next lane'''
         x = self.pos[0]
         y = self.pos[1]
         if self.merging:
@@ -127,7 +129,8 @@ class Vehicle(Agent):
                 self.model.map.place_agent(self, (x,arr[self.line]))
                 self.y_vel = 0
                 self.merging = False
-        else:
+        else: #not yet merging
+            #Decision tree
             safe = True
             if lead_car.x_vel - self.x_vel < -10:
                 if lead_car.pos[0] - lead_car.length - x < 27:
@@ -141,9 +144,10 @@ class Vehicle(Agent):
                 self.y_vel = direction*self.merge_vel
                 self.merging = True
             else:
-                self.brake()
+                self.brake() #if not yet safe
                 
     def move(self):
+        '''update position of car according to x- and y-velocities'''
         dt = self.model.dt
         x = self.pos[0]
         y = self.pos[1]
@@ -152,15 +156,16 @@ class Vehicle(Agent):
         except Exception:
             self.model.schedule.remove(self)
     
-    def step(self): 
+    def step(self):
+        '''main method for vehicle control logic'''
         x = self.pos[0]
         stop_time = self.x_vel/self.decel
         stop_dist = self.x_vel*stop_time/2
         lane_end = self.model.map.merge_pts[self.line]
-        #if lane is ending
+        #if merging or lane is ending
         if self.merging or 0 < lane_end <= x + 2*stop_dist:
             self.get_new_goal(stop_dist) #update goal
-            #if safe, merge
+            #identify lead and lag car in the next lane
             lead_car = self
             lag_car = self
             for car in self.model.schedule.agents:
@@ -179,10 +184,12 @@ class Vehicle(Agent):
                                         lead_car = car
                                 else:
                                     lag_car = car
+            #attempt to merge / continue merging
             self.merge(lag_car,lead_car)
+            #if lane is ending w/in stopping distance, brake
             if not self.merging and lane_end <= x + stop_dist + 1:
                 self.brake()
-        #else:
+        #check if path ahead is blocked
         blocked = False
         for car in self.model.schedule.agents:
             if isinstance(car,Vehicle) and car.unique_id != self.unique_id:
@@ -192,6 +199,7 @@ class Vehicle(Agent):
                         if 0 < (car.pos[0] - x - car.length) <= stop_dist + 1 - car.x_vel*stop_time/4:
                             blocked = True
                             break
+        # brake if blocked and not merging, otherwise accelerate
         if blocked:
             self.brake()
         elif self.goal == self.line or self.merging:
@@ -201,7 +209,7 @@ class Vehicle(Agent):
 
         
 def traffic_arrival(model):
-    #time = model.schedule.steps
+    '''control arrival rate of cars at the tollbooth'''
     total_count = 0
     total_queue = 0
     for agent in model.schedule.agents:
@@ -213,9 +221,11 @@ def traffic_arrival(model):
     return total_count
     
 def merging_vehicle_count(model):
+    '''return current number of vehicles in the simulation'''
     return model.schedule.get_agent_count() - model.map.B
     
 def calc_capacity(model,merge_pts,lanes,width):
+    '''calculate theoretical carrying capacity for each lane, return total'''
     test = Vehicle(0,model,0,-1)
     L = (test.max_speed**2)/(2*test.accel)
     K1 = lambda x : 1/(test.length + 2*(2*test.accel*x)**0.5)
@@ -231,12 +241,14 @@ def calc_capacity(model,merge_pts,lanes,width):
 
 class TollBoothModel(Model):
     """A model with some number of agents."""
-    def __init__(self, width, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt):
-        self.dt = dt
-        self.time = 0
+    def __init__(self, width, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt, double):
+        self.dt = dt #timestep
+        self.time = 0 #elapsed time
         self.map = Map(width,LANE_WIDTH,B,lanes,merge_pts,line_pos)
         self.schedule = BaseScheduler(self)
         self.capacity = floor(calc_capacity(self,merge_pts,lanes,width))-ceil(B/2)
+        if double: #demonstrate that doubling capacity results in interference
+            self.capacity = 2*self.capacity
         
         # Create booths
         for i in range(1,B+1):
@@ -244,6 +256,7 @@ class TollBoothModel(Model):
             self.schedule.add(b)
             self.map.place_agent(b, (0,(i-1/2)*LANE_WIDTH))
         
+        #Collect vehicle count and position data
         self.datacollector = DataCollector(
             model_reporters={"Current Car Count": merging_vehicle_count,
                              "Cumulative Car Count": traffic_arrival},
