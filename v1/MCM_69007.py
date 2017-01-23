@@ -10,7 +10,7 @@ from mesa.space import ContinuousSpace
 from mesa.datacollection import DataCollector
 from scipy import integrate
 import random as rng
-from math import ceil
+from math import floor,ceil
 #import numpy as np
 
 class Map(ContinuousSpace):
@@ -18,7 +18,7 @@ class Map(ContinuousSpace):
     def __init__(self, width, LANE_WIDTH, B, lanes, merge_pts, line_pos):
         super().__init__(width, B*LANE_WIDTH, False)
         self.LANE_WIDTH = LANE_WIDTH
-        self.B = B
+        self.B = B #number of booths
         self.line_pos = line_pos
         self.merge_pts = merge_pts
         self.lanes = lanes
@@ -56,10 +56,11 @@ class Booth(Agent):
         return self.vel
         
 class EZPass(Booth):
+    """Booth that spawns vehicles at full speed, no wait time"""
     def __init__(self, lane, model):
         super().__init__(lane, model)
         self.wait_time = 0
-        self.vel = 45*1.46667
+        self.vel = 60*1.46667
         
 
 class Vehicle(Agent):
@@ -226,10 +227,6 @@ def calc_capacity(model,merge_pts,lanes,width):
             or (line % 2 == 0 and not lanes[line-1]):
                 total += integrate.quad(K1,0,min(l,L))[0]
                 total += max(0,l-L)/(test.length+2*test.max_speed)
-#            else:
-#                print(line)
-#                total += integrate.quad(K1,0,min(l,L))[0]
-#                total += max(0,l-L)/(test.length+2*test.max_speed)
     return total
 
 class TollBoothModel(Model):
@@ -239,7 +236,7 @@ class TollBoothModel(Model):
         self.time = 0
         self.map = Map(width,LANE_WIDTH,B,lanes,merge_pts,line_pos)
         self.schedule = BaseScheduler(self)
-        self.capacity = ceil(calc_capacity(self,merge_pts,lanes,width))
+        self.capacity = floor(calc_capacity(self,merge_pts,lanes,width))-ceil(B/2)
         
         # Create booths
         for i in range(1,B+1):
@@ -262,21 +259,7 @@ class TollBoothModel(Model):
                 if merging_vehicle_count(self) <= self.capacity or \
                 agent.unique_id % 2 == 1:
                     agent.open_gate()
-#                    if agent.unique_id == 1: #and self.schedule.steps % 80 == 0:
-#                        agent.open_gate()
-#                    elif agent.unique_id == 2: #and self.schedule.steps % 80 == 0:
-#                        agent.open_gate()  
-#                    elif agent.unique_id == 3:
-#                        agent.open_gate()
-#                    elif agent.unique_id == 4: #and self.schedule.steps % 80 == 0:
-#                        agent.open_gate()
-#                    elif agent.unique_id == 5: #and self.schedule.steps % 80 == 0:
-#                        agent.open_gate()  
-#                    elif agent.unique_id == 6:
-#                        agent.open_gate()
-                    
         self.datacollector.collect(self)        
         self.schedule.step()
         self.time += self.dt
-        #print(round(self.time,2))
 

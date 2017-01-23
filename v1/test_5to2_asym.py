@@ -4,59 +4,56 @@ Created on Fri Jan 20 20:23:24 2017
 
 @author: cmnunn
 """
-from MCM_v1 import TollBoothModel
+from MCM_69007 import *
 import numpy as np
 import matplotlib.pyplot as plt
-import math
 
 #Time parameter(s)
 dt = 0.05 #sec
 
 # Map parameters
-B = 6 #2 booths
-L = 2 #1 exit lane
+B = 5 #5 booths
+L = 2 #2 exit lanes
 LANE_WIDTH = 12 #feet
+# Array of lane ending points
 merge_pts = np.zeros(2*B-1)
-line_pos = np.zeros(2*B-1)
-lanes = [1,0,1,1,1,1,1,1,1,0,1]
+# Array of lane location on the y-axis
+line_pos = np.zeros(2*B-1) 
 for i in range(2*B-1):
     line_pos[i] = (i+1)*LANE_WIDTH/2
+# Array of lanes (0 for junctions that lie halfway between lanes, 1 otherwise)
+lanes = [1,0,1,0,1,0,1,0,1]
     
-#Free (default, comment other cases)
 
-#Left
+#Merge points for 5 lane, alternating left-right-left merge
 merge_pts[0] = 100 #feet
 merge_pts[1] = 100
-merge_pts[2] = 350
-merge_pts[3] = float('inf')
-merge_pts[4] = 350
-merge_pts[5] = float('inf') #feet
-merge_pts[6] = 350
+merge_pts[2] = 250
+merge_pts[3] = 250
+merge_pts[4] = 400
+merge_pts[5] = 400
+merge_pts[6] = float('inf')
 merge_pts[7] = float('inf')
-merge_pts[8] = 350
-merge_pts[9] = 100
-merge_pts[10] = 100
+merge_pts[8] = float('inf')
 
-model = TollBoothModel(800, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt)
 
+track_length = 600
+
+model = TollBoothModel(track_length, LANE_WIDTH, B, lanes, merge_pts, line_pos, dt)
+
+#Print calculated capacity
+print(calc_capacity(model,merge_pts,lanes,track_length))
+
+#5000 timesteps
 steps = 5000
 
 for i in range(steps):
     model.step()
-    
+ 
 vehicle_pos = model.datacollector.get_agent_vars_dataframe()
 count_data = model.datacollector.get_model_vars_dataframe()
-plt.figure()
 count_data.plot()
-#cumulative = count_data.xs(99, level="Step")["Wealth"]
-#arr = np.transpose(count_data.values)
-#print(arr[0])
-#plt.figure()
-#plt.plot(range(1,5001),arr[0].tolist())
-#plt.plot(arr[1])
 plt.show()
-
-frame = vehicle_pos.loc[100,'AgentID':'Position']
 
 #plt.ion()
 #fig = plt.figure()
